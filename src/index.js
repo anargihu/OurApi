@@ -1,20 +1,25 @@
 const encoder = new TextEncoder();
 
-function corsHeaders() {
+const WEBSITE_ORIGIN = "https://ourwebsite.6w4h7m8fvn.workers.dev";
+
+function corsHeaders(origin) {
+  const allowedOrigin = origin === WEBSITE_ORIGIN ? WEBSITE_ORIGIN : "null";
+
   return {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Max-Age": "86400"
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin"
   };
 }
 
-function json(data, status = 200) {
+function json(data, status = 200, origin = "") {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...corsHeaders()
+      ...corsHeaders(origin)
     }
   });
 }
@@ -79,17 +84,13 @@ async function createPasswordHash(password) {
 async function verifyPassword(password, stored) {
   const parts = stored.split(":");
 
-  if (parts.length !== 2) {
-    return false;
-  }
+  if (parts.length !== 2) return false;
 
   const salt = fromBase64(parts[0]);
   const expected = fromBase64(parts[1]);
   const actual = await hashPassword(password, salt);
 
-  if (actual.length !== expected.length) {
-    return false;
-  }
+  if (actual.length !== expected.length) return false;
 
   let difference = 0;
 
@@ -107,21 +108,17 @@ function createId() {
 function getSessionId(request) {
   const authorization = request.headers.get("Authorization");
 
-  if (!authorization || !authorization.startsWith("Bearer ")) {
+  if (!authorization?.startsWith("Bearer ")) {
     return null;
   }
 
-  const sessionId = authorization.slice(7).trim();
-
-  return sessionId || null;
+  return authorization.slice(7).trim() || null;
 }
 
 async function getUser(request, env) {
   const sessionId = getSessionId(request);
 
-  if (!sessionId) {
-    return null;
-  }
+  if (!sessionId) return null;
 
   const session = await env.DB.prepare(
     "SELECT user_id, expires_at FROM sessions WHERE id = ?"
@@ -129,9 +126,7 @@ async function getUser(request, env) {
     .bind(sessionId)
     .first();
 
-  if (!session) {
-    return null;
-  }
+  if (!session) return null;
 
   if (session.expires_at <= Date.now()) {
     await env.DB.prepare(
@@ -150,7 +145,7 @@ async function getUser(request, env) {
     .first();
 }
 
-async function handleSignup(request, env) {
+async function handleSignup(request, env, origin) {
   let body;
 
   try {
@@ -158,7 +153,7 @@ async function handleSignup(request, env) {
   } catch {
     return json({
       error: "Invalid JSON."
-    }, 400);
+    }, 400, origin);
   }
 
   const username = String(body.username || "").trim();
@@ -168,25 +163,25 @@ async function handleSignup(request, env) {
   if (!username || !email || !password) {
     return json({
       error: "Username, email, and password are required."
-    }, 400);
+    }, 400, origin);
   }
 
   if (username.length < 3 || username.length > 32) {
     return json({
       error: "Username must be between 3 and 32 characters."
-    }, 400);
+    }, 400, origin);
   }
 
   if (!/^[a-zA-Z0-9_]+$/.test(username)) {
     return json({
       error: "Username can only contain letters, numbers, and underscores."
-    }, 400);
+    }, 400, origin);
   }
 
   if (password.length < 8) {
     return json({
       error: "Password must be at least 8 characters."
-    }, 400);
+    }, 400, origin);
   }
 
   const existing = await env.DB.prepare(
@@ -198,7 +193,7 @@ async function handleSignup(request, env) {
   if (existing) {
     return json({
       error: "Username or email is already registered."
-    }, 409);
+    }, 409, origin);
   }
 
   const id = createId();
@@ -219,10 +214,10 @@ async function handleSignup(request, env) {
       email,
       created_at: createdAt
     }
-  }, 201);
+  }, 201, origin);
 }
 
-async function handleSignin(request, env) {
+async function handleSignin(request, env, origin) {
   let body;
 
   try {
@@ -230,7 +225,7 @@ async function handleSignin(request, env) {
   } catch {
     return json({
       error: "Invalid JSON."
-    }, 400);
+    }, 400, origin);
   }
 
   const login = String(body.login || "").trim().toLowerCase();
@@ -239,7 +234,7 @@ async function handleSignin(request, env) {
   if (!login || !password) {
     return json({
       error: "Login and password are required."
-    }, 400);
+    }, 400, origin);
   }
 
   const user = await env.DB.prepare(
@@ -251,7 +246,7 @@ async function handleSignin(request, env) {
   if (!user) {
     return json({
       error: "Invalid login or password."
-    }, 401);
+    }, 401, origin);
   }
 
   const valid = await verifyPassword(password, user.password_hash);
@@ -259,7 +254,7 @@ async function handleSignin(request, env) {
   if (!valid) {
     return json({
       error: "Invalid login or password."
-    }, 401);
+    }, 401, origin);
   }
 
   const sessionId = createId();
@@ -281,25 +276,25 @@ async function handleSignin(request, env) {
       email: user.email,
       created_at: user.created_at
     }
-  });
+  }, 200, origin);
 }
 
-async function handleMe(request, env) {
+async function handleMe(request, env, origin) {
   const user = await getUser(request, env);
 
   if (!user) {
     return json({
       error: "Not signed in."
-    }, 401);
+    }, 401, origin);
   }
 
   return json({
     signed_in: true,
     user
-  });
+  }, 200, origin);
 }
 
-async function handleSignout(request, env) {
+async function handleSignout(request, env, origin) {
   const sessionId = getSessionId(request);
 
   if (sessionId) {
@@ -312,15 +307,17 @@ async function handleSignout(request, env) {
 
   return json({
     success: true
-  });
+  }, 200, origin);
 }
 
 export default {
   async fetch(request, env) {
+    const origin = request.headers.get("Origin") || "";
+
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
-        headers: corsHeaders()
+        headers: corsHeaders(origin)
       });
     }
 
@@ -332,7 +329,7 @@ export default {
           status: 200,
           headers: {
             "Content-Type": "text/plain",
-            ...corsHeaders()
+            ...corsHeaders(origin)
           }
         });
       }
@@ -341,34 +338,34 @@ export default {
         return json({
           status: "online",
           service: "OurApi"
-        });
+        }, 200, origin);
       }
 
       if (url.pathname === "/auth/signup" && request.method === "POST") {
-        return await handleSignup(request, env);
+        return await handleSignup(request, env, origin);
       }
 
       if (url.pathname === "/auth/signin" && request.method === "POST") {
-        return await handleSignin(request, env);
+        return await handleSignin(request, env, origin);
       }
 
       if (url.pathname === "/auth/me" && request.method === "GET") {
-        return await handleMe(request, env);
+        return await handleMe(request, env, origin);
       }
 
       if (url.pathname === "/auth/signout" && request.method === "POST") {
-        return await handleSignout(request, env);
+        return await handleSignout(request, env, origin);
       }
 
       return json({
         error: "Not Found"
-      }, 404);
+      }, 404, origin);
     } catch (error) {
       console.error(error);
 
       return json({
         error: "Internal Server Error"
-      }, 500);
+      }, 500, origin);
     }
   }
 };
