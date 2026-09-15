@@ -1,6 +1,6 @@
 const encoder = new TextEncoder();
 
-const WEBSITE_ORIGIN = "https://ourwebsite.6w4h7m8fvn.workers.dev";
+const WEBSITE_ORIGIN = "https://ourwebsite.ourweb.workers.dev";
 
 function corsHeaders(origin) {
   const allowedOrigin = origin === WEBSITE_ORIGIN ? WEBSITE_ORIGIN : "null";
