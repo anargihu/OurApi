@@ -27,7 +27,7 @@ function json(data, status = 200, origin = "") {
 function randomBytes(length) {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
-  return bytes;
+  return bytes; 
 }
 
 function toBase64(bytes) {
