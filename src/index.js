@@ -362,6 +362,24 @@ export default {
       }, 404, origin);
     } catch (error) {
       console.error(error);
+      
+      if (url.pathname === "/db-test" && request.method === "GET") {
+  try {
+    const result = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM users"
+    ).first();
+
+    return json({
+      database: "connected",
+      users: result.count
+    }, 200, origin);
+  } catch (error) {
+    return json({
+      database: "error",
+      message: error.message
+    }, 500, origin);
+  }
+}
 
       return json({
         error: "Internal Server Error"
