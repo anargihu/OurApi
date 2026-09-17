@@ -27,7 +27,7 @@ function json(data, status = 200, origin = "") {
 function randomBytes(length) {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
-  return bytes; 
+  return bytes;
 }
 
 function toBase64(bytes) {
@@ -341,6 +341,17 @@ export default {
         }, 200, origin);
       }
 
+      if (url.pathname === "/db-test" && request.method === "GET") {
+        const result = await env.DB.prepare(
+          "SELECT COUNT(*) AS count FROM users"
+        ).first();
+
+        return json({
+          database: "connected",
+          users: result.count
+        }, 200, origin);
+      }
+
       if (url.pathname === "/auth/signup" && request.method === "POST") {
         return await handleSignup(request, env, origin);
       }
@@ -362,27 +373,10 @@ export default {
       }, 404, origin);
     } catch (error) {
       console.error(error);
-      
-      if (url.pathname === "/db-test" && request.method === "GET") {
-  try {
-    const result = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM users"
-    ).first();
-
-    return json({
-      database: "connected",
-      users: result.count
-    }, 200, origin);
-  } catch (error) {
-    return json({
-      database: "error",
-      message: error.message
-    }, 500, origin);
-  }
-}
 
       return json({
-        error: "Internal Server Error"
+        error: "Internal Server Error",
+        message: error.message
       }, 500, origin);
     }
   }
