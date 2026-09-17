@@ -2,5 +2,12 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ourapi",
   "main": "src/index.js",
-  "compatibility_date": "2026-09-05"
+  "compatibility_date": "2026-09-15",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ourapi-accounts",
+      "database_id": "175ecbc2-1988-4627-8bee-5e31a243497e"
+    }
+  ]
 }
